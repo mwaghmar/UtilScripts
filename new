@@ -1,0 +1,324 @@
+#!/usr/bin/perl
+#
+# new:
+# generate a template for a particular file
+#
+# Copyright (c) 2001 Chris Lightfoot. All rights reserved.
+#
+# $Id: new,v 1.18 2004/11/18 18:03:51 chris Exp $
+#
+
+@pwe = getpwuid($>);
+$copyright_author = $ENV{FULLNAME};
+$copyright_author ||= $pwe[6];
+@tim = gmtime();
+$year = $tim[5] + 1900;
+
+$copyright = "Copyright (c) $year $copyright_author. All rights reserved.";
+$contact = undef;
+if (defined($ENV{MAILADDRESS})) {
+    $contact = "Email: $ENV{MAILADDRESS}";
+}
+
+if (defined($ENV{WEBADDRESS})) {
+    $contact .= "; " if ($contact);
+    $contact .= "WWW: $ENV{WEBADDRESS}";
+}
+
+# search for a .newblurb file
+my $path = '';
+for (my $i = 0; $i < 25; ++$i) {
+    if (-e "${path}.newblurb") {
+        if (open(BLURB, "${path}.newblurb")) {
+            $copyright = <BLURB>;
+            chomp($copyright);
+            $contact = <BLURB>;
+            $contact ||= '';
+            chomp($contact);
+            close(BLURB);
+            last;
+        }
+    }
+    $path = "../$path";
+}
+
+if (@ARGV == 1) {
+    # only argument is the file name
+    if ($ARGV[0] =~ /\.(cpp|C|cxx|cc)$/) {
+        $type = "c++";
+    } elsif ($ARGV[0] =~ /\.(java|j)$/) {
+        $type = "java";
+    } elsif ($ARGV[0] =~ /\.c$/) {
+        $type = "c";
+    } elsif ($ARGV[0] =~ /\.h$/) {
+        $type = "h";
+    } elsif ($ARGV[0] =~ /\.pm$/) {
+        $type = "pm";
+    } elsif ($ARGV[0] =~ /\.pl$/) {
+        $type = "pl";
+    }elsif ($ARGV[0] =~ /\.html$/) {
+        $type = "html";
+    } elsif ($ARGV[0] =~ /\.tex$/) {
+        $type = "latex";
+    } elsif ($ARGV[0] =~ /^Makefile/) {
+        $type = "make";
+    } elsif ($ARGV[0] =~ /\.sql$/) {
+        $type = "sql";
+    } elsif ($ARGV[0] =~ /\.php$/) {
+        $type = "php";
+    } else {
+        print STDERR "Couldn't guess type for file $ARGV[0]\n";
+        exit(1);
+    }
+
+    print STDERR "Guessed type $type\n";
+} elsif (@ARGV > 1) {
+    # assume first argument is type, remainder are filenames
+    $type = shift(@ARGV);
+} else {
+    # oops
+    print STDERR <<EOF;
+Usage: new <type> <file> <file> creates files of type type
+    or new <file>               guess type of file and create it
+EOF
+    exit(1);
+}
+
+# supported file types:
+# c     C language file
+# c++   C++ language file
+# h     /C++ header file
+# pl    Perl program
+# pm    Perl module
+# sh    Shell script
+# html  HTML file
+# latex LaTeX document
+# make  Makefile
+foreach $file (@ARGV) {
+    if (-e $file) {
+        # don't clobber files
+        print STDERR "$file exists, not overwriting it\n";
+    } else {
+        if (!open(FILE, ">$file")) {
+            print STDERR "$file: $!\n";
+            next;
+        }
+
+        if ($type eq "c" or $type eq "c++") {
+            print FILE <<EOF;
+/*
+ * $file:
+ *
+ * $copyright
+ * $contact
+ *
+ */
+
+static const char rcsid[] = "\$\Id:\$";
+
+EOF
+        } elsif ($type eq "java") {
+            print FILE <<EOF;
+/*
+ * $file:
+ *
+ * $copyright
+ * $contact
+ *
+ * \$\Id:\$
+ *
+ */
+EOF
+        } elsif ($type eq "h") {
+            $tag = "__" . $file . "_";
+            $tag =~ tr/a-z/A-Z/;
+            $tag =~ tr/./_/;
+
+            print FILE <<EOF;
+/*
+ * $file:
+ *
+ * $copyright
+ * $contact
+ *
+ * \$\Id:\$
+ *
+ */
+
+#ifndef $tag /* include guard */
+#define $tag
+
+#endif /* $tag */
+EOF
+        } elsif ($type eq "perl") {
+            print FILE <<EOF;
+#!/usr/bin/perl -w
+#
+# $file:
+#
+# $copyright
+# $contact
+#
+
+my \$rcsid = ''; \$rcsid .= '\$\Id:\$';
+
+use strict;
+
+EOF
+
+            system "/bin/chmod +x $file";
+        } elsif ($type eq "make") {
+            print FILE <<EOF;
+#
+# $file:
+#
+# $copyright
+# $contact
+#
+# \$\Id:\$
+#
+
+EOF
+        } elsif ($type eq "pm") {
+            my $p = $file;
+            $p =~ s#\.pm$##;
+            $p =~ s#/#::#g;
+            print FILE <<EOF;
+#!/usr/bin/perl
+#
+# $file:
+#
+# $copyright
+# $contact
+#
+# \$\Id:\$
+#
+
+package $p;
+
+use strict;
+
+1;
+EOF
+        } elsif ($type eq "pl") {
+            my $p = $file;
+            $p =~ s#\.pl$##;
+            $p =~ s#/#::#g;
+            print FILE <<EOF;
+#!/usr/bin/perl
+#
+# $file:
+#
+# $copyright
+# $contact
+#
+# \$\Id:\$
+#
+
+use strict;
+
+EOF
+        } elsif ($type eq "sh") {
+            print FILE <<EOF;
+#!/bin/sh
+#
+# $file:
+#
+# $copyright
+# $contact
+#
+# \$\Id:\$
+#
+
+EOF
+            system "/bin/chmod +x $file";
+        } elsif ($type eq "html") {
+            print FILE <<EOF;
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<html>
+<!--
+    $file:
+
+    $copyright
+    $contact
+
+    \$\Id:\$
+
+-->
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+<!--
+    This non-standard meta tag is necessary to prevent Microsoft Internet
+    Explorer from modifying the page as it is viewed by inserting `smart'
+    links to Microsoft-sponsored content. See
+
+        http://www.microsoft.com/windows/ie/preview/smarttags/default.asp
+
+    for more information.
+-->
+<meta name="MSSmartTagsPreventParsing" content="TRUE">
+<title>
+    $file
+</title>
+</head>
+<body>
+
+<hr>
+
+<p>
+Copyright (c) $year <a href="mailto:$ENV{MAILADDRESS}">$copyright_author</a>.
+All rights reserved.
+</p>
+
+</body>
+</html>
+EOF
+        } elsif ($type eq "latex") {
+            print FILE <<EOF;
+%
+% $file:
+%
+% $copyright
+% $contact
+%
+% \$\Id:\$
+%
+\\documentclass[a4paper,12pt]{article}
+
+\\begin{document}
+
+\\end{document}
+EOF
+        } elsif ($type eq "sql") {
+            print FILE <<EOF;
+--
+-- $file:
+--
+-- $copyright
+-- $contact
+--
+-- \$\Id:\$
+--
+EOF
+        } elsif ($type eq "php") {
+            print FILE <<EOF;
+<?php
+/*
+ * $file:
+ * 
+ * $copyright
+ * $contact
+ *
+ * \$\Id:\$
+ * 
+ */
+
+?>
+EOF
+        } else {
+            print STDERR "Type $type unknown, creating empty $file\n";
+            print FILE "\n";
+        }
+        close(FILE);
+    }
+}
